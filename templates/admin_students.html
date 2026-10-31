@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Students{% endblock %}
+{% block content %}
+<h3>Registered Students</h3>
+<div class="table-responsive"><table class="table bg-white table-hover">
+<thead><tr><th>Name</th><th>Roll No</th><th>Department</th><th>Email</th><th>Complaints</th><th>Joined</th></tr></thead>
+<tbody>{% for s in students %}<tr><td>{{ s.name }}</td><td>{{ s.roll_no }}</td><td>{{ s.department }}</td><td>{{ s.email }}</td><td>{{ s.complaints|length }}</td><td>{{ s.created_at.strftime('%d %b %Y') }}</td></tr>
+{% else %}<tr><td colspan="6" class="text-center text-muted">No students yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

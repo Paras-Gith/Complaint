@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Publish Alerts{% endblock %}
+{% block content %}
+<h3>Publish Alert</h3>
+<form method="post" class="card card-body shadow-sm mb-4">
+  <input name="title" class="form-control mb-2" placeholder="Title" required>
+  <textarea name="message" rows="3" class="form-control mb-2" placeholder="Message" required></textarea>
+  <button class="btn btn-primary align-self-start">Publish</button>
+</form>
+{% for a in alerts %}
+<div class="card mb-2"><div class="card-body d-flex justify-content-between">
+  <div><strong>{{ a.title }}</strong> <small class="text-muted">{{ a.created_at.strftime('%d %b %Y, %H:%M') }}</small><br>{{ a.message }}</div>
+  <form method="post" action="{{ url_for('delete_alert', aid=a.id) }}"><button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button></form>
+</div></div>
+{% endfor %}
+{% endblock %}

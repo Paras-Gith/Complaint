@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block content %}
+<h3><i class="bi bi-bell"></i> System Alerts</h3>
+{% for a in alerts %}
+<div class="card mb-2"><div class="card-body"><h6>{{ a.title }} <small class="text-muted">· {{ a.created_at.strftime('%d %b %Y, %H:%M') }}</small></h6><p class="mb-0">{{ a.message }}</p></div></div>
+{% else %}<div class="alert alert-info">No alerts at the moment.</div>{% endfor %}
+{% endblock %}

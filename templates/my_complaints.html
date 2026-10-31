@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, priority_badge %}
+{% block title %}My Complaints{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3>My Complaints</h3>
+  <a href="{{ url_for('new_complaint') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> New</a>
+</div>
+<div class="btn-group mb-3">
+  <a class="btn btn-outline-secondary {{ 'active' if not status }}" href="{{ url_for('my_complaints') }}">All</a>
+  {% for s in STATUSES %}<a class="btn btn-outline-secondary {{ 'active' if status==s }}" href="{{ url_for('my_complaints', status=s) }}">{{ s }}</a>{% endfor %}
+</div>
+{% if complaints %}
+<div class="table-responsive"><table class="table table-hover align-middle bg-white">
+  <thead><tr><th>#</th><th>Title</th><th>Category</th><th>Priority</th><th>Status</th><th>Submitted</th><th></th></tr></thead>
+  <tbody>{% for c in complaints %}
+    <tr><td>{{ c.id }}</td><td>{{ c.title }}</td><td>{{ c.category }}</td><td>{{ priority_badge(c.priority) }}</td>
+    <td>{{ status_badge(c.status) }}</td><td>{{ c.created_at.strftime('%d %b %Y') }}</td>
+    <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('complaint_detail', cid=c.id) }}">View</a></td></tr>
+  {% endfor %}</tbody></table></div>
+{% else %}<div class="alert alert-info">No complaints found.</div>{% endif %}
+{% endblock %}

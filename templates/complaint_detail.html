@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, priority_badge %}
+{% block title %}Complaint #{{ c.id }}{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card shadow-sm mb-3"><div class="card-body">
+      <div class="d-flex justify-content-between"><h4>#{{ c.id }} · {{ c.title }}</h4><div>{{ status_badge(c.status) }}</div></div>
+      <p class="text-muted mb-2">{{ c.category }} · {{ priority_badge(c.priority) }} · Submitted {{ c.created_at.strftime('%d %b %Y, %H:%M') }}
+        {% if current_user.role == 'admin' %} · by <strong>{{ c.student.name }}</strong> ({{ c.student.roll_no or '—' }}, {{ c.student.department or '—' }}){% endif %}</p>
+      <p style="white-space:pre-wrap">{{ c.description }}</p>
+      {% if c.admin_remarks %}<div class="alert alert-info mb-0"><strong>Admin remarks:</strong> {{ c.admin_remarks }}</div>{% endif %}
+    </div></div>
+    {% if current_user.role == 'admin' %}
+    <div class="card shadow-sm"><div class="card-body">
+      <h5>Update Status</h5>
+      <form method="post" action="{{ url_for('update_complaint', cid=c.id) }}">
+        <div class="row g-2">
+          <div class="col-md-4"><select name="status" class="form-select">{% for s in STATUSES %}<option {{ 'selected' if s==c.status }}>{{ s }}</option>{% endfor %}</select></div>
+          <div class="col-md-6"><input name="remarks" class="form-control" placeholder="Remarks (visible to student)"></div>
+          <div class="col-md-2"><button class="btn btn-primary w-100">Save</button></div>
+        </div>
+      </form>
+    </div></div>
+    {% endif %}
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm"><div class="card-header">Status History</div>
+      <ul class="list-group list-group-flush">
+      {% for h in c.history|reverse %}
+        <li class="list-group-item">{{ status_badge(h.status) }} <small class="text-muted">{{ h.changed_at.strftime('%d %b %Y, %H:%M') }}</small><br><small>{{ h.remarks }}</small></li>
+      {% endfor %}</ul></div>
+  </div>
+</div>
+{% endblock %}

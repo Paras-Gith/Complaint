@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block content %}
+<h3 class="mb-3">Administrative Dashboard</h3>
+<div class="row g-3 mb-4">
+  {% for label, val, color, icon in [('Total', stats.total, 'primary','collection'), ('Pending', stats.pending,'warning','hourglass-split'), ('In Progress', stats.progress,'info','arrow-repeat'), ('Resolved', stats.resolved,'success','check-circle'), ('Students', stats.students,'secondary','people')] %}
+  <div class="col-6 col-md"><div class="card border-{{ color }} shadow-sm"><div class="card-body text-center">
+    <i class="bi bi-{{ icon }} fs-3 text-{{ color }}"></i><div class="fs-2 fw-bold">{{ val }}</div><div class="text-muted">{{ label }}</div></div></div></div>
+  {% endfor %}
+</div>
+<div class="row">
+  <div class="col-lg-7"><div class="card shadow-sm mb-3"><div class="card-header">Recent Complaints</div>
+    <table class="table mb-0"><tbody>
+    {% for c in recent %}<tr><td>#{{ c.id }}</td><td><a href="{{ url_for('complaint_detail', cid=c.id) }}">{{ c.title }}</a><br><small class="text-muted">{{ c.student.name }}</small></td><td>{{ status_badge(c.status) }}</td></tr>
+    {% else %}<tr><td class="text-muted">No complaints yet.</td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="col-lg-5"><div class="card shadow-sm"><div class="card-header">By Category</div>
+    <ul class="list-group list-group-flush">{% for cat, n in by_cat %}<li class="list-group-item d-flex justify-content-between">{{ cat }}<span class="badge bg-primary">{{ n }}</span></li>{% else %}<li class="list-group-item text-muted">No data.</li>{% endfor %}</ul></div></div>
+</div>
+{% endblock %}

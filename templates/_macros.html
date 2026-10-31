@@ -1,0 +1,6 @@
+{% macro status_badge(s) -%}
+<span class="badge bg-{{ {'Pending':'warning text-dark','In Progress':'info text-dark','Resolved':'success'}[s] }}">{{ s }}</span>
+{%- endmacro %}
+{% macro priority_badge(p) -%}
+<span class="badge bg-{{ {'Low':'secondary','Medium':'primary','High':'danger'}[p] }}">{{ p }}</span>
+{%- endmacro %}

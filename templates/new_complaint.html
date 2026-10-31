@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}New Complaint{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-md-8">
+<div class="card shadow-sm"><div class="card-body p-4">
+  <h3 class="mb-3">Submit a Complaint</h3>
+  <form method="post" class="needs-validation" novalidate>
+    <div class="mb-3"><label class="form-label">Title</label><input name="title" maxlength="150" class="form-control" required></div>
+    <div class="row">
+      <div class="col-md-6 mb-3"><label class="form-label">Category</label>
+        <select name="category" class="form-select" required>{% for c in CATEGORIES %}<option>{{ c }}</option>{% endfor %}</select></div>
+      <div class="col-md-6 mb-3"><label class="form-label">Priority</label>
+        <select name="priority" class="form-select">{% for p in PRIORITIES %}<option {{ 'selected' if p=='Medium' }}>{{ p }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="mb-3"><label class="form-label">Description</label><textarea name="description" rows="6" class="form-control" required minlength="10"></textarea></div>
+    <button class="btn btn-primary">Submit Complaint</button>
+  </form>
+</div></div></div></div>
+{% endblock %}
