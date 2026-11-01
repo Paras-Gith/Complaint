@@ -42,7 +42,8 @@ def admin_required(f):
     def wrapper(*a, **kw):
         u = current_user()
         if not u:
-            return redirect(url_for("login"))
+            flash("Please log in as administrator.", "warning")
+            return redirect(url_for("admin_login"))
         if u.role != "admin":
             abort(403)
         return f(*a, **kw)
@@ -88,24 +89,32 @@ def register():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    """Student login."""
     if request.method == "POST":
         email = request.form["email"].strip().lower()
-        u = User.query.filter_by(email=email).first()
+        u = User.query.filter_by(email=email, role="student").first()
         if u and u.check_password(request.form["password"]):
             session.clear()
             session["user_id"] = u.id
             flash(f"Welcome, {u.name}!", "success")
-            return redirect(url_for("admin_dashboard" if u.role == "admin" else "my_complaints"))
-        flash("Invalid email or password.", "danger")
+            return redirect(url_for("my_complaints"))
+        flash("Invalid student email or password.", "danger")
     return render_template("login.html")
 
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    flash("Logged out.", "info")
-    return redirect(url_for("index"))
-
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    """Administrator login (separate from student login)."""
+    if request.method == "POST":
+        email = request.form["email"].strip().lower()
+        u = User.query.filter_by(email=email, role="admin").first()
+        if u and u.check_password(request.form["password"]):
+            session.clear()
+            session["user_id"] = u.id
+            flash("Welcome, Administrator!", "success")
+            return redirect(url_for("admin_dashboard"))
+        flash("Invalid admin email or password.", "danger")
+    return render_template("admin_login.html")
 
 # ---------- student ----------
 @app.route("/complaints/new", methods=["GET", "POST"])

@@ -5,7 +5,8 @@
   <p class="lead">Report issues online, track their progress, and get them resolved faster — no paperwork.</p>
   {% if not current_user %}
     <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg me-2">Get Started</a>
-    <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-lg">Login</a>
+    <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-lg me-2">Student Login</a>
+    <a href="{{ url_for('admin_login') }}" class="btn btn-dark btn-lg">Admin Login</a>
   {% elif current_user.role == 'student' %}
     <a href="{{ url_for('new_complaint') }}" class="btn btn-primary btn-lg">File a Complaint</a>
   {% else %}
