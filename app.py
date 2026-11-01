@@ -115,6 +115,12 @@ def admin_login():
             return redirect(url_for("admin_dashboard"))
         flash("Invalid admin email or password.", "danger")
     return render_template("admin_login.html")
+    
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Logged out.", "info")
+    return redirect(url_for("index"))
 
 # ---------- student ----------
 @app.route("/complaints/new", methods=["GET", "POST"])
