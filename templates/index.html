@@ -1,27 +1,51 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="p-5 mb-4 bg-light rounded-3 text-center">
-  <h1 class="display-5 fw-bold">College Complaint &amp; Issue Reporting</h1>
-  <p class="lead">Report issues online, track their progress, and get them resolved faster — no paperwork.</p>
-  {% if not current_user %}
-    <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg me-2">Get Started</a>
-    <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-lg me-2">Student Login</a>
-    <a href="{{ url_for('admin_login') }}" class="btn btn-dark btn-lg">Admin Login</a>
-  {% elif current_user.role == 'student' %}
-    <a href="{{ url_for('new_complaint') }}" class="btn btn-primary btn-lg">File a Complaint</a>
-  {% else %}
-    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-primary btn-lg">Go to Dashboard</a>
-  {% endif %}
-</div>
-<div class="row text-center mb-4">
-  <div class="col-md-4"><i class="bi bi-pencil-square fs-1 text-primary"></i><h5>Submit Online</h5><p class="text-muted">Register and file complaints in minutes.</p></div>
-  <div class="col-md-4"><i class="bi bi-geo-alt fs-1 text-primary"></i><h5>Track Status</h5><p class="text-muted">Pending, In Progress or Resolved — always visible.</p></div>
-  <div class="col-md-4"><i class="bi bi-speedometer2 fs-1 text-primary"></i><h5>Central Dashboard</h5><p class="text-muted">Administrators manage everything in one place.</p></div>
-</div>
+<section class="row g-5 align-items-center">
+  <div class="col-lg-7">
+    <p class="kicker">Student complaint desk</p>
+    <h1 class="display">Something broken?<br><em>Write it down.</em><br>Watch it get fixed.</h1>
+    <p class="lede">Report a problem with the hostel, library, canteen or classrooms. The administration moves it from Pending to In Progress to Resolved, and you can check where it stands at any time.</p>
+    <div class="d-flex flex-wrap gap-3 mt-4">
+      {% if not current_user %}
+        <a class="btn btn-primary" href="{{ url_for('register') }}">Create student account</a>
+        <a class="btn btn-light" href="{{ url_for('login') }}">Student login</a>
+        <a class="btn btn-dark" href="{{ url_for('admin_login') }}">Admin</a>
+      {% elif current_user.role == 'student' %}
+        <a class="btn btn-primary" href="{{ url_for('new_complaint') }}">File a complaint</a>
+        <a class="btn btn-light" href="{{ url_for('my_complaints') }}">My complaints</a>
+      {% else %}
+        <a class="btn btn-primary" href="{{ url_for('admin_dashboard') }}">Open dashboard</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <aside class="ticket">
+      <div class="meta">Example ticket · not real data</div>
+      <h4>Water cooler broken, Hostel B</h4>
+      <ol class="steps">
+        <li class="done">Filed by student</li>
+        <li class="now">In progress</li>
+        <li>Resolved</li>
+      </ol>
+    </aside>
+  </div>
+</section>
+
+<section>
+  <h2 class="section-title">How a complaint travels</h2>
+  <ol class="ledger">
+    <li><span class="no">01</span><div><h3>You file it</h3><p>Pick a category and a priority. Say what is wrong and where, in plain words.</p></div></li>
+    <li><span class="no">02</span><div><h3>The administration picks it up</h3><p>It starts as Pending. When work begins it moves to In Progress, with a remark you can read.</p></div></li>
+    <li><span class="no">03</span><div><h3>You see it close</h3><p>Resolved complaints stay in your history, with every status change dated.</p></div></li>
+  </ol>
+</section>
+
 {% if alerts %}
-<h4><i class="bi bi-bell"></i> Latest Alerts</h4>
-{% for a in alerts %}
-<div class="alert alert-secondary"><strong>{{ a.title }}</strong> <small class="text-muted">· {{ a.created_at.strftime('%d %b %Y') }}</small><br>{{ a.message }}</div>
-{% endfor %}
+<section>
+  <h2 class="section-title">Notice board</h2>
+  {% for a in alerts %}
+  <div class="alert"><strong>{{ a.title }}</strong> <small>· {{ a.created_at.strftime('%d %b %Y') }}</small><br>{{ a.message }}</div>
+  {% endfor %}
+</section>
 {% endif %}
 {% endblock %}
