@@ -3,8 +3,8 @@
 <section class="row g-5 align-items-center">
   <div class="col-lg-7">
     <p class="kicker">Student complaint desk</p>
-    <h1 class="display">Something broken?<br><em>Write it down.</em><br>Watch it get fixed.</h1>
-    <p class="lede">Report a problem with the hostel, library, canteen or classrooms. The administration moves it from Pending to In Progress to Resolved, and you can check where it stands at any time.</p>
+    <h1 class="display">Report a campus problem and <em>follow it until it's closed.</em></h1>
+    <p class="lede">Hostel, library, canteen, classroom or transport: file it once and check its status whenever you like. Every status change and administrator remark is saved with a date.</p>
     <div class="d-flex flex-wrap gap-3 mt-4">
       {% if not current_user %}
         <a class="btn btn-primary" href="{{ url_for('register') }}">Create student account</a>
@@ -32,11 +32,11 @@
 </section>
 
 <section>
-  <h2 class="section-title">How a complaint travels</h2>
+  <h2 class="section-title">What each status means</h2>
   <ol class="ledger">
-    <li><span class="no">01</span><div><h3>You file it</h3><p>Pick a category and a priority. Say what is wrong and where, in plain words.</p></div></li>
-    <li><span class="no">02</span><div><h3>The administration picks it up</h3><p>It starts as Pending. When work begins it moves to In Progress, with a remark you can read.</p></div></li>
-    <li><span class="no">03</span><div><h3>You see it close</h3><p>Resolved complaints stay in your history, with every status change dated.</p></div></li>
+    <li><span class="no">Pending</span><div><p>Your complaint is saved with its category, priority and the time you filed it. Nobody has started on it yet.</p></div></li>
+    <li><span class="no">In Progress</span><div><p>An administrator has picked it up. Any remark they leave appears on the complaint page.</p></div></li>
+    <li><span class="no">Resolved</span><div><p>The administrator has closed it. The complaint and its dated history stay under My Complaints.</p></div></li>
   </ol>
 </section>
 

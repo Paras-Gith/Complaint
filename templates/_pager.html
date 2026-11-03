@@ -1,0 +1,8 @@
+{% if p and p.pages > 1 %}
+<nav class="d-flex justify-content-between align-items-center my-3" aria-label="Pages">
+  {% set args = request.args.to_dict() %}
+  <div>{% if p.has_prev %}<a class="btn btn-sm btn-light" href="{{ url_for(request.endpoint, **dict(args, page=p.prev_num)) }}">&larr; Prev</a>{% endif %}</div>
+  <small>Page {{ p.page }} of {{ p.pages }} &middot; {{ p.total }} total</small>
+  <div>{% if p.has_next %}<a class="btn btn-sm btn-light" href="{{ url_for(request.endpoint, **dict(args, page=p.next_num)) }}">Next &rarr;</a>{% endif %}</div>
+</nav>
+{% endif %}

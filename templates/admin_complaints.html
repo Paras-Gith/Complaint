@@ -27,3 +27,4 @@
     <td><form method="post" action="{{ url_for('delete_complaint', cid=c.id) }}" onsubmit="return confirm('Delete complaint #{{ c.id }}?')"><button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button></form></td></tr>
   {% else %}<tr><td colspan="8" class="text-center text-muted">No complaints match.</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}
+{% include "_pager.html" %}

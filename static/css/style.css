@@ -9,7 +9,7 @@
 }
 body{font-family:var(--body);font-size:1.0625rem;line-height:1.6;color:var(--ink);
   background:radial-gradient(900px 420px at 90% -8%,#E6D2A6,transparent 65%),var(--paper)}
-body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;opacity:.07;mix-blend-mode:multiply;
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;opacity:.05;mix-blend-mode:multiply;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
 h1,h2,h3,h4,h5{font-family:var(--display);font-weight:800;letter-spacing:-.02em;line-height:1.05}
 h3{font-size:2rem} h4{font-size:1.5rem}
@@ -110,3 +110,6 @@ main>*:nth-child(2){--i:1} main>*:nth-child(3){--i:2} main>*:nth-child(4){--i:3}
 .gate-admin a{color:var(--ochre)}
 .gate-admin .btn{background:var(--ochre);color:var(--ink);border-color:var(--paper);box-shadow:3px 3px 0 var(--paper)}
 .gate-admin .btn:hover{background:var(--paper);color:var(--ink)}
+
+.ledger li{grid-template-columns:11rem 1fr}
+.ledger .no{font-size:1.5rem}
