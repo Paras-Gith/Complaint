@@ -1,10 +1,13 @@
 import csv
 import io
+import os
+import secrets
 from functools import wraps
 
 from flask import (Flask, render_template, request, redirect, url_for,
-                   session, flash, Response, abort)
+                   session, flash, Response, abort, stream_with_context)
 from sqlalchemy import or_, func
+from sqlalchemy.orm import contains_eager, joinedload
 
 from config import Config
 from models import (db, User, Complaint, StatusHistory, Alert,
@@ -15,6 +18,21 @@ app.config.from_object(Config)
 db.init_app(app)
 
 
+# ---------- CSRF protection ----------
+def csrf_token():
+    if "_csrf" not in session:
+        session["_csrf"] = secrets.token_hex(16)
+    return session["_csrf"]
+
+
+@app.before_request
+def csrf_protect():
+    if request.method == "POST":
+        sent = request.form.get("_csrf", "")
+        if not sent or not secrets.compare_digest(sent, session.get("_csrf", "")):
+            abort(400)
+
+
 # ---------- helpers ----------
 def current_user():
     uid = session.get("user_id")
@@ -23,7 +41,7 @@ def current_user():
 
 @app.context_processor
 def inject_globals():
-    return dict(current_user=current_user(), STATUSES=STATUSES,
+    return dict(current_user=current_user(), csrf_token=csrf_token, STATUSES=STATUSES,
                 CATEGORIES=CATEGORIES, PRIORITIES=PRIORITIES)
 
 
@@ -115,12 +133,14 @@ def admin_login():
             return redirect(url_for("admin_dashboard"))
         flash("Invalid admin email or password.", "danger")
     return render_template("admin_login.html")
-    
+
+
 @app.route("/logout")
 def logout():
     session.clear()
     flash("Logged out.", "info")
     return redirect(url_for("index"))
+
 
 # ---------- student ----------
 @app.route("/complaints/new", methods=["GET", "POST"])
@@ -185,7 +205,8 @@ def admin_dashboard():
                   .group_by(Complaint.status).all())
     by_cat = (db.session.query(Complaint.category, func.count(Complaint.id))
               .group_by(Complaint.category).all())
-    recent = Complaint.query.order_by(Complaint.created_at.desc()).limit(5).all()
+    recent = (Complaint.query.options(joinedload(Complaint.student))
+              .order_by(Complaint.created_at.desc()).limit(5).all())
     stats = {
         "total": sum(counts.values()),
         "pending": counts.get("Pending", 0),
@@ -197,7 +218,7 @@ def admin_dashboard():
 
 
 def filtered_query():
-    q = Complaint.query.join(User)
+    q = Complaint.query.join(User).options(contains_eager(Complaint.student))
     search = request.args.get("q", "").strip()
     status = request.args.get("status", "")
     category = request.args.get("category", "")
@@ -221,8 +242,9 @@ def filtered_query():
 @app.route("/admin/complaints")
 @admin_required
 def admin_complaints():
-    return render_template("admin_complaints.html", complaints=filtered_query().all(),
-                           f=request.args)
+    page = request.args.get("page", 1, type=int)
+    p = filtered_query().paginate(page=page, per_page=app.config["PER_PAGE"], error_out=False)
+    return render_template("admin_complaints.html", complaints=p.items, p=p, f=request.args)
 
 
 @app.route("/admin/complaints/<int:cid>/update", methods=["POST"])
@@ -246,7 +268,6 @@ def update_complaint(cid):
 @admin_required
 def delete_complaint(cid):
     c = db.get_or_404(Complaint, cid)
-    StatusHistory.query.filter_by(complaint_id=c.id).delete()
     db.session.delete(c)
     db.session.commit()
     flash(f"Complaint #{cid} deleted.", "info")
@@ -279,24 +300,55 @@ def delete_alert(aid):
 @app.route("/admin/students")
 @admin_required
 def admin_students():
-    students = User.query.filter_by(role="student").order_by(User.created_at.desc()).all()
-    return render_template("admin_students.html", students=students)
+    page = request.args.get("page", 1, type=int)
+    p = db.paginate(db.select(User).where(User.role == "student").order_by(User.created_at.desc()),
+                    page=page, per_page=app.config["PER_PAGE"], error_out=False)
+    ids = [u.id for u in p.items]
+    counts = {}
+    if ids:  # one grouped query for the whole page instead of one query per student
+        counts = dict(db.session.query(Complaint.user_id, func.count(Complaint.id))
+                      .filter(Complaint.user_id.in_(ids)).group_by(Complaint.user_id).all())
+    return render_template("admin_students.html", p=p, counts=counts)
+
+
+def safe_cell(v):
+    """Stop spreadsheet formula injection (=, +, -, @ at the start of a cell)."""
+    v = "" if v is None else str(v)
+    return "'" + v if v[:1] in ("=", "+", "-", "@") else v
 
 
 @app.route("/admin/report.csv")
 @admin_required
 def report_csv():
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(["ID", "Student", "Roll No", "Department", "Category", "Priority",
-                "Title", "Status", "Submitted", "Last Updated", "Remarks"])
-    for c in filtered_query().all():
-        w.writerow([c.id, c.student.name, c.student.roll_no, c.student.department,
-                    c.category, c.priority, c.title, c.status,
-                    c.created_at.strftime("%Y-%m-%d %H:%M"),
-                    c.updated_at.strftime("%Y-%m-%d %H:%M"), c.admin_remarks or ""])
-    return Response(buf.getvalue(), mimetype="text/csv",
+    def generate():
+        buf = io.StringIO()
+        w = csv.writer(buf)
+
+        def flush():
+            data = buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+            return data
+
+        w.writerow(["ID", "Student", "Roll No", "Department", "Category", "Priority",
+                    "Title", "Status", "Submitted", "Last Updated", "Remarks"])
+        yield flush()
+        for c in filtered_query().yield_per(500):
+            w.writerow([c.id, safe_cell(c.student.name), safe_cell(c.student.roll_no),
+                        safe_cell(c.student.department), c.category, c.priority,
+                        safe_cell(c.title), c.status,
+                        c.created_at.strftime("%Y-%m-%d %H:%M"),
+                        c.updated_at.strftime("%Y-%m-%d %H:%M"), safe_cell(c.admin_remarks)])
+            yield flush()
+
+    return Response(stream_with_context(generate()), mimetype="text/csv",
                     headers={"Content-Disposition": "attachment; filename=complaint_report.csv"})
+
+
+@app.errorhandler(400)
+def bad_request(_):
+    return render_template("error.html", code=400,
+                           msg="Your session expired or the form was invalid. Go back, reload the page and try again."), 400
 
 
 @app.errorhandler(403)
@@ -314,4 +366,4 @@ with app.app_context():
     seed_admin()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
