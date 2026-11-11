@@ -6,6 +6,8 @@ from functools import wraps
 
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, flash, Response, abort, stream_with_context)
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from sqlalchemy import or_, func
 from sqlalchemy.orm import contains_eager, joinedload
 
@@ -16,6 +18,13 @@ from models import (db, User, Complaint, StatusHistory, Alert,
 app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
+
+# ---------- login rate limiting (counts FAILED attempts only, per IP) ----------
+# Behind a proxy every visitor can look like one IP; configure ProxyFix before deploying.
+limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")  # use Redis in production
+STUDENT_LIMIT = "10 per 15 minutes"  # looser: many students share one college IP
+ADMIN_LIMIT = "5 per 15 minutes"     # stricter: a single high-value account
+failed_login = lambda resp: resp.status_code == 200  # a failed login re-renders the form (200); success redirects (302)
 
 if app.config["SECRET_KEY"] == "change-this-in-production":
     print("WARNING: using the default SECRET_KEY. Set a random SECRET_KEY environment variable.")
@@ -108,6 +117,21 @@ def seed_admin():
         db.session.commit()
 
 
+COMMON_PASSWORDS = {"password", "password1", "password123", "12345678", "123456789", "qwerty123",
+                    "qwertyuiop", "iloveyou", "11111111", "abcd1234", "admin123", "college123"}
+
+
+def weak_password(pw, email):
+    if len(pw) < 8:
+        return "Password must be at least 8 characters."
+    if pw.lower() in COMMON_PASSWORDS or pw.isdigit() or len(set(pw)) < 4:
+        return "That password is too easy to guess. Mix letters and numbers."
+    local = email.split("@")[0]
+    if len(local) >= 3 and local in pw.lower():
+        return "Password must not contain your email name."
+    return None
+
+
 # ---------- public / auth ----------
 @app.route("/")
 def index():
@@ -121,8 +145,11 @@ def register():
         name = request.form["name"].strip()
         email = request.form["email"].strip().lower()
         pw = request.form["password"]
-        if not name or not email or len(pw) < 6:
-            flash("Fill all fields; password must be at least 6 characters.", "danger")
+        problem = weak_password(pw, email) if email else None
+        if not name or not email:
+            flash("Please fill in your name and email.", "danger")
+        elif problem:
+            flash(problem, "danger")
         elif User.query.filter_by(email=email).first():
             flash("An account with this email already exists.", "danger")
         else:
@@ -138,6 +165,7 @@ def register():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit(STUDENT_LIMIT, methods=["POST"], deduct_when=failed_login)
 def login():
     """Student login."""
     if request.method == "POST":
@@ -153,6 +181,7 @@ def login():
 
 
 @app.route("/admin/login", methods=["GET", "POST"])
+@limiter.limit(ADMIN_LIMIT, methods=["POST"], deduct_when=failed_login)
 def admin_login():
     """Administrator login (separate from student login)."""
     if request.method == "POST":
@@ -375,6 +404,12 @@ def report_csv():
 
     return Response(stream_with_context(generate()), mimetype="text/csv",
                     headers={"Content-Disposition": "attachment; filename=complaint_report.csv"})
+
+
+@app.errorhandler(429)
+def too_many(_):
+    return render_template("error.html", code=429,
+                           msg="Too many failed login attempts. Wait 15 minutes and try again."), 429
 
 
 @app.errorhandler(400)

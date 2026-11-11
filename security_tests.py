@@ -20,6 +20,8 @@ from models import User, Complaint           # noqa: E402
 
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
 rows = []
+PW = "Sup3r-secret!"
+_ip = [0]
 P1 = "<script>alert(1)</script>"
 P2 = '"><img src=x onerror=alert(1)>'
 
@@ -39,15 +41,23 @@ def loc(r):
     return urlparse(r.headers.get("Location", "")).path
 
 
-def student(email, name="Student", pw="secret1", **extra):
+def newc():
+    """Test client with its own IP, so the login limiter doesn't throttle unrelated tests."""
+    _ip[0] += 1
     c = app.test_client()
+    c.environ_base["REMOTE_ADDR"] = f"10.0.{_ip[0] // 250}.{_ip[0] % 250 + 1}"
+    return c
+
+
+def student(email, name="Student", pw=PW, **extra):
+    c = newc()
     post(c, "/register", name=name, email=email, password=pw, **extra)
     post(c, "/login", email=email, password=pw)
     return c
 
 
 def admin_client():
-    c = app.test_client()
+    c = newc()
     post(c, "/admin/login", email=Config.ADMIN_EMAIL, password=Config.ADMIN_PASSWORD)
     return c
 
@@ -79,7 +89,7 @@ sqli = ["' OR '1'='1' --", "admin@college.edu' --", '" OR ""="', "' OR 1=1 #"]
 ok = True
 for path in ("/login", "/admin/login"):
     for p in sqli:
-        c = app.test_client()
+        c = newc()
         r1 = post(c, path, email=p, password="x")
         r2 = post(c, path, email=Config.ADMIN_EMAIL, password=p)
         ok &= r1.status_code == 200 and r2.status_code == 200
@@ -124,21 +134,21 @@ with app.app_context():
     u = User.query.filter_by(email="a@t.com").first()
     check(A, "Passwords are stored hashed", u.password_hash.startswith(("scrypt:", "pbkdf2:")))
     role_ok = User.query.filter_by(email="d@t.com").first() is None
-c = app.test_client()
-post(c, "/register", name="D", email="d@t.com", password="secret1", role="admin")
+c = newc()
+post(c, "/register", name="D", email="d@t.com", password=PW, role="admin")
 with app.app_context():
     d = User.query.filter_by(email="d@t.com").first()
     check(A, "Registration cannot be used to create an admin (mass assignment)", d and d.role == "student")
 
-m1 = post(app.test_client(), "/login", email="nobody@t.com", password="secret1").get_data(as_text=True)
-m2 = post(app.test_client(), "/login", email="a@t.com", password="wrong").get_data(as_text=True)
+m1 = post(newc(), "/login", email="nobody@t.com", password=PW).get_data(as_text=True)
+m2 = post(newc(), "/login", email="a@t.com", password="wrong").get_data(as_text=True)
 check(A, "Login gives the same error for unknown email and wrong password",
       "Invalid student email or password." in m1 and "Invalid student email or password." in m2)
 
-c = app.test_client()
+c = newc()
 with c.session_transaction() as s:
     s["pre_login"] = 1
-r = post(c, "/login", email="a@t.com", password="secret1")
+r = post(c, "/login", email="a@t.com", password=PW)
 cookies = " ".join(r.headers.getlist("Set-Cookie"))
 check(A, "Session cookie has HttpOnly", "HttpOnly" in cookies)
 check(A, "Session cookie has SameSite", "SameSite" in cookies)
@@ -155,24 +165,29 @@ except Exception:
 c.get("/logout")
 check(A, "Logout ends the browser session", c.get("/my-complaints").status_code == 302)
 if old:
-    c2 = app.test_client()
+    c2 = newc()
     c2.set_cookie("session", old)
     check(A, "A copied session cookie stops working after logout",
           c2.get("/my-complaints").status_code == 302,
           "Flask cookies are stateless: a stolen cookie stays valid until it expires", warn=True)
 
-bf = app.test_client()
+bf = newc()
 codes = [post(bf, "/admin/login", email=Config.ADMIN_EMAIL, password=f"wrong{i}").status_code for i in range(25)]
 good = post(bf, "/admin/login", email=Config.ADMIN_EMAIL, password=Config.ADMIN_PASSWORD)
-check(A, "Repeated wrong passwords are throttled or locked out",
-      429 in codes or good.status_code != 302, "25 wrong attempts, then the correct password still worked")
+check(A, "Admin login: repeated wrong passwords are throttled",
+      429 in codes and good.status_code == 429, "25 wrong attempts, then the correct password still worked")
+sc = newc()
+scodes = [post(sc, "/login", email="a@t.com", password=f"wrong{i}").status_code for i in range(15)]
+check(A, "Student login: repeated wrong passwords are throttled", 429 in scodes,
+      "15 wrong attempts were all processed")
 
 check(A, "Default admin password has been changed", Config.ADMIN_PASSWORD != "admin123",
       "Admin password is the public default 'admin123'")
-c = app.test_client()
-r = post(c, "/register", name="Weak", email="weak@t.com", password="123456")
-check(A, "Weak passwords (e.g. 123456) are refused", r.status_code != 302,
-      "Minimum is only 6 characters, no complexity check", warn=True)
+c = newc()
+weak = [post(newc(), "/register", name="W", email=f"wendy{i}@t.com", password=p).status_code
+        for i, p in enumerate(["123456", "password1", "short1", "xwendy3-pass"])]
+check(A, "Weak passwords (too short, common, or containing the email) are refused",
+      all(s != 302 for s in weak), "A weak password was accepted")
 
 default_key = app.config["SECRET_KEY"] == "change-this-in-production"
 detail = ""
@@ -181,7 +196,7 @@ if default_key:
     with app.app_context():
         aid = User.query.filter_by(role="admin").first().id
     forged = SecureCookieSessionInterface().get_signing_serializer(app).dumps({"user_id": aid})
-    fc = app.test_client()
+    fc = newc()
     fc.set_cookie("session", forged)
     detail = "Anyone who knows the default key can forge an admin cookie. Forged cookie accepted: " \
              + str(fc.get("/admin").status_code == 200)
@@ -190,7 +205,7 @@ check(A, "SECRET_KEY is not the default value", not default_key, detail)
 # ---------- 3. ACCESS CONTROL ----------
 A = "Access control"
 admin_gets = ["/admin", "/admin/complaints", "/admin/students", "/admin/alerts", "/admin/report.csv"]
-anon = app.test_client()
+anon = newc()
 check(A, "Anonymous users are redirected from every protected page",
       all(anon.get(p).status_code == 302 for p in admin_gets + ["/my-complaints", "/complaints/new", f"/complaints/{cid_a}"]))
 check(A, "Students get 403 on every admin page", all(bob.get(p).status_code == 403 for p in admin_gets))
@@ -219,7 +234,7 @@ check(A, "Templates send the CSRF token (meta tag in base.html)", "csrf-token" i
 
 # ---------- 4. MISCONFIGURATION & HEADERS ----------
 A = "Config/Headers"
-h = app.test_client().get("/").headers
+h = newc().get("/").headers
 need = {"Content-Security-Policy": "CSP", "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "clickjacking protection", "Referrer-Policy": "referrer leakage",
         "Permissions-Policy": "browser feature limits"}
@@ -234,7 +249,7 @@ check(A, "Logged-in pages are not cached by the browser",
       "no-store" in alice.get("/my-complaints").headers.get("Cache-Control", ""),
       "Back button after logout can show private pages", warn=True)
 check(A, "Debug mode is off", not app.debug and os.environ.get("FLASK_DEBUG") != "1")
-nf = app.test_client().get("/does-not-exist")
+nf = newc().get("/does-not-exist")
 body = nf.get_data(as_text=True)
 check(A, "Error pages do not leak stack traces", nf.status_code == 404 and "Traceback" not in body
       and "werkzeug" not in body.lower())
