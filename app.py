@@ -17,8 +17,16 @@ app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
 
+if app.config["SECRET_KEY"] == "change-this-in-production":
+    print("WARNING: using the default SECRET_KEY. Set a random SECRET_KEY environment variable.")
+
 
 # ---------- CSRF protection ----------
+def get_page():
+    """Page number from the URL, clamped so huge values can't crash the database query."""
+    return max(1, min(request.args.get("page", 1, type=int), 100000))
+
+
 def csrf_token():
     if "_csrf" not in session:
         session["_csrf"] = secrets.token_hex(16)
@@ -37,6 +45,30 @@ def csrf_protect():
 def current_user():
     uid = session.get("user_id")
     return db.session.get(User, uid) if uid else None
+
+
+CSP = ("default-src 'self'; "
+       "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+       "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com 'unsafe-inline'; "
+       "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
+       "img-src 'self' data:; object-src 'none'; base-uri 'self'; "
+       "form-action 'self'; frame-ancestors 'none'")
+
+
+@app.after_request
+def security_headers(resp):
+    h = resp.headers
+    h.setdefault("Content-Security-Policy", CSP)
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("X-Frame-Options", "DENY")
+    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    h.setdefault("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
+    h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    if app.config["SESSION_COOKIE_SECURE"]:  # only meaningful over HTTPS
+        h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    if session.get("user_id"):  # private pages must not be cached
+        h["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.context_processor
@@ -242,7 +274,7 @@ def filtered_query():
 @app.route("/admin/complaints")
 @admin_required
 def admin_complaints():
-    page = request.args.get("page", 1, type=int)
+    page = get_page()
     p = filtered_query().paginate(page=page, per_page=app.config["PER_PAGE"], error_out=False)
     return render_template("admin_complaints.html", complaints=p.items, p=p, f=request.args)
 
@@ -300,7 +332,7 @@ def delete_alert(aid):
 @app.route("/admin/students")
 @admin_required
 def admin_students():
-    page = request.args.get("page", 1, type=int)
+    page = get_page()
     p = db.paginate(db.select(User).where(User.role == "student").order_by(User.created_at.desc()),
                     page=page, per_page=app.config["PER_PAGE"], error_out=False)
     ids = [u.id for u in p.items]
