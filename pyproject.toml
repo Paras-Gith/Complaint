@@ -1,0 +1,20 @@
+[tool.ruff]
+target-version = "py38"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "ANN", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.14"
+files = ["app.py", "config.py", "models.py", "security_tests.py"]
+strict = true
+disallow_any_expr = true
+disallow_any_explicit = true
+warn_unreachable = true
+show_error_codes = true
+pretty = true

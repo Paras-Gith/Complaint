@@ -1,6 +1,5 @@
 import csv
 import io
-import os
 import secrets
 from functools import wraps
 
@@ -21,19 +20,17 @@ db.init_app(app)
 
 # ---------- login rate limiting (counts FAILED attempts only, per IP) ----------
 # Behind a proxy every visitor can look like one IP; configure ProxyFix before deploying.
-limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")  # use Redis in production
-STUDENT_LIMIT = "10 per 15 minutes"  # looser: many students share one college IP
-ADMIN_LIMIT = "5 per 15 minutes"     # stricter: a single high-value account
+limiter = Limiter(get_remote_address, app=app, storage_uri=Config.RATE_LIMIT_STORAGE_URI)
+STUDENT_LIMIT = (
+    f"{Config.STUDENT_LOGIN_MAX_ATTEMPTS} per {Config.LOGIN_LIMIT_WINDOW_MINUTES} minutes"
+)
+ADMIN_LIMIT = f"{Config.ADMIN_LOGIN_MAX_ATTEMPTS} per {Config.LOGIN_LIMIT_WINDOW_MINUTES} minutes"
 failed_login = lambda resp: resp.status_code == 200  # a failed login re-renders the form (200); success redirects (302)
-
-if app.config["SECRET_KEY"] == "change-this-in-production":
-    print("WARNING: using the default SECRET_KEY. Set a random SECRET_KEY environment variable.")
-
 
 # ---------- CSRF protection ----------
 def get_page():
     """Page number from the URL, clamped so huge values can't crash the database query."""
-    return max(1, min(request.args.get("page", 1, type=int), 100000))
+    return max(1, min(request.args.get("page", 1, type=int), Config.MAX_PAGE))
 
 
 def csrf_token():
@@ -56,12 +53,14 @@ def current_user():
     return db.session.get(User, uid) if uid else None
 
 
-CSP = ("default-src 'self'; "
-       "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
-       "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com 'unsafe-inline'; "
-       "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
-       "img-src 'self' data:; object-src 'none'; base-uri 'self'; "
-       "form-action 'self'; frame-ancestors 'none'")
+CSP = (
+    "default-src 'self'; "
+    f"script-src 'self' {' '.join(Config.SCRIPT_CDN_ORIGINS)} 'unsafe-inline'; "
+    f"style-src 'self' {' '.join(Config.STYLE_CDN_ORIGINS)} 'unsafe-inline'; "
+    f"font-src 'self' {' '.join(Config.FONT_CDN_ORIGINS)}; "
+    "img-src 'self' data:; object-src 'none'; base-uri 'self'; "
+    "form-action 'self'; frame-ancestors 'none'"
+)
 
 
 @app.after_request
@@ -83,7 +82,7 @@ def security_headers(resp):
 @app.context_processor
 def inject_globals():
     return dict(current_user=current_user(), csrf_token=csrf_token, STATUSES=STATUSES,
-                CATEGORIES=CATEGORIES, PRIORITIES=PRIORITIES)
+                CATEGORIES=CATEGORIES, PRIORITIES=PRIORITIES, asset_urls=Config.ASSET_URLS)
 
 
 def login_required(f):
@@ -394,7 +393,7 @@ def report_csv():
         w.writerow(["ID", "Student", "Roll No", "Department", "Category", "Priority",
                     "Title", "Status", "Submitted", "Last Updated", "Remarks"])
         yield flush()
-        for c in filtered_query().yield_per(500):
+        for c in filtered_query().yield_per(Config.CSV_BATCH_SIZE):
             w.writerow([c.id, safe_cell(c.student.name), safe_cell(c.student.roll_no),
                         safe_cell(c.student.department), c.category, c.priority,
                         safe_cell(c.title), c.status,
@@ -409,7 +408,8 @@ def report_csv():
 @app.errorhandler(429)
 def too_many(_):
     return render_template("error.html", code=429,
-                           msg="Too many failed login attempts. Wait 15 minutes and try again."), 429
+                           msg=f"Too many failed login attempts. Wait "
+                               f"{Config.LOGIN_LIMIT_WINDOW_MINUTES} minutes and try again."), 429
 
 
 @app.errorhandler(400)
@@ -433,4 +433,4 @@ with app.app_context():
     seed_admin()
 
 if __name__ == "__main__":
-    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
+    app.run(debug=Config.DEBUG)

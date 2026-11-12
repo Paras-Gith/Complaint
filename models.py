@@ -68,3 +68,7 @@ class Alert(db.Model):
     title = db.Column(db.String(150), nullable=False)
     message = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=now)
+
+
+
+    
