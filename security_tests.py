@@ -18,9 +18,10 @@ os.environ["SECRET_KEY"] = secrets.token_urlsafe(32)
 os.environ["ADMIN_EMAIL"] = "security-tests@example.invalid"
 os.environ["ADMIN_PASSWORD"] = secrets.token_urlsafe(24)
 
-from app import app, db                      # noqa: E402
-from config import Config                    # noqa: E402
-from models import User, Complaint           # noqa: E402
+from app import app, db  # noqa: E402
+from complaint_app.application import create_app  # noqa: E402
+from config import Config  # noqa: E402
+from models import Complaint, User  # noqa: E402
 
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
 rows = []
@@ -84,8 +85,42 @@ with app.app_context():
     cid_e = Complaint.query.filter(Complaint.title.like("%script%")).first().id
 post(adm, f"/admin/complaints/{cid_e}/update", status="In Progress", remarks=P1 + P2)
 post(adm, "/admin/alerts", title=P1 + P2, message=P2 + P1)
+post(adm, "/admin/alerts", title="Pagination alert", message="Second alert body")
+post(alice, "/complaints/new", title="Second fan", description="Another fan is broken",
+     category="Hostel", priority="Medium")
 check("Setup", "Admin test login works", adm.get("/admin").status_code == 200,
       "If this fails, set ADMIN_EMAIL / ADMIN_PASSWORD env vars to match your admin")
+
+class FactoryTestConfig(Config):
+    SECRET_KEY = "factory-test-secret-key-that-is-long-enough"
+    ADMIN_EMAIL = "factory-test@example.invalid"
+    ADMIN_PASSWORD = "Factory-Test-Admin-Password"
+    SQLALCHEMY_DATABASE_URI = "sqlite://"
+
+
+factory_app = create_app(FactoryTestConfig)
+check("Architecture", "Application factory builds an independent app",
+      factory_app.test_client().get("/").status_code == 200)
+
+# ---------- bounded list and streamed export behavior ----------
+original_page_size = app.config["PER_PAGE"]
+app.config["PER_PAGE"] = 1
+student_page_one = alice.get("/my-complaints?page=1").get_data(as_text=True)
+student_page_two = alice.get("/my-complaints?page=2").get_data(as_text=True)
+check("Performance", "Student complaint lists are paginated",
+      "Second fan" in student_page_one and "Broken fan" in student_page_two)
+alerts_page_one = adm.get("/alerts?page=1").get_data(as_text=True)
+alerts_page_two = adm.get("/alerts?page=2").get_data(as_text=True)
+check("Performance", "Public alerts are paginated",
+      "Pagination alert" in alerts_page_one
+      and "&lt;script&gt;alert(1)&lt;/script&gt;" in alerts_page_two)
+admin_alerts_page_two = adm.get("/admin/alerts?page=2").get_data(as_text=True)
+check("Performance", "Admin alert lists are paginated",
+      "&lt;script&gt;alert(1)&lt;/script&gt;" in admin_alerts_page_two)
+report = adm.get("/admin/report.csv").get_data(as_text=True)
+check("Performance", "CSV export streams complaint rows",
+      "Broken fan" in report and "ID,Student,Roll No,Department" in report)
+app.config["PER_PAGE"] = original_page_size
 
 # ---------- 1. INJECTION ----------
 A = "Injection"
@@ -115,7 +150,9 @@ for pg in ("-1", "0", "abc", "999999999999999999999", "1;DROP TABLE users"):
     ok &= adm.get("/admin/students", query_string={"page": pg}).status_code == 200
 check(A, "Filter and page parameters survive hostile values (no 500 errors)", ok)
 
-code = "".join(src(f) for f in ("app.py", "models.py", "config.py"))
+code_files = ["app.py", "models.py", "config.py"]
+code_files.extend(glob.glob("complaint_app/**/*.py", recursive=True))
+code = "".join(src(path) for path in code_files)
 bad = re.findall(r"\b(os\.system|subprocess|os\.popen|eval\(|exec\(|pickle|yaml\.load|"
                  r"render_template_string|__import__|shell=True)", code)
 check(A, "No command execution, eval or unsafe deserialisation in the code", not bad, ", ".join(set(bad)))
