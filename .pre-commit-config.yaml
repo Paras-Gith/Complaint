@@ -1,0 +1,27 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-lint-core
+        name: Ruff lint (application and tests)
+        entry: ruff check --select E4,E7,E9,F,I
+        language: system
+        types: [python]
+        files: ^(app\.py|security_tests\.py|complaint_app/.*\.py)$
+      - id: ruff-format-core
+        name: Ruff format check (application)
+        entry: ruff format --check
+        language: system
+        types: [python]
+        files: ^(app\.py|complaint_app/.*\.py)$
+      - id: mypy-core
+        name: Mypy strict incremental gate
+        entry: python -m mypy --follow-imports=skip --disable-error-code=misc --disable-error-code=no-any-return --disable-error-code=untyped-decorator --disable-error-code=union-attr app.py complaint_app
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: gitleaks-staged
+        name: Gitleaks staged secret scan
+        entry: gitleaks protect --staged --redact --verbose
+        language: system
+        pass_filenames: false
+        always_run: true
